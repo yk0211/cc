@@ -1,0 +1,3 @@
+/opt/share/cc/build_linux/CMakeFiles/rebuild_cache.dir
+/opt/share/cc/build_linux/CMakeFiles/cc.dir
+/opt/share/cc/build_linux/CMakeFiles/edit_cache.dir

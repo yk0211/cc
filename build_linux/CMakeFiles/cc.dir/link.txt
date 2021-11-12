@@ -1,1 +1,0 @@
-/usr/bin/c++  -O3 -DNDEBUG   CMakeFiles/cc.dir/src/main.cpp.o  -o ../bin/cc -lopencc 

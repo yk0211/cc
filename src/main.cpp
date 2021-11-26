@@ -1,13 +1,14 @@
 #include <iostream>
 #include <string>
 #include <sstream>
-#include <stdio.h>
+#include <algorithm>
 #include <opencc/opencc.h>
 #include <ghc/filesystem.hpp>
+#include <uchardet/uchardet.h>
+#include <iconv/iconv.h>
 
 namespace fs = ghc::filesystem;
 
-// 检查输入是否合法
 bool CheckInputValid(fs::path &input_dir, fs::path &output_dir)
 {
 	fs::directory_entry input_entry(input_dir);
@@ -15,39 +16,112 @@ bool CheckInputValid(fs::path &input_dir, fs::path &output_dir)
 
 	if (!input_entry.is_directory())
 	{
-		std::cerr << "Input is not directory." << std::endl;
+		std::cerr << "input is not directory." << std::endl;
 		return false;
 	}
 
 	if (!output_entry.is_directory())
 	{
-		std::cerr << "Output is not directory." << std::endl;
+		std::cerr << "output is not directory." << std::endl;
 		return false;
 	}
 
 	if (!input_entry.exists())
 	{
-		std::cerr << "Input directory not exists." << std::endl;
+		std::cerr << "input is not exists." << std::endl;
 		return false;
 	}
 
 	if (!output_entry.exists())
 	{
-		std::cerr << "Output directory not exists." << std::endl;
+		std::cerr << "output is not exists." << std::endl;
 		return false;
 	}
 
 	return true;
 }
 
-// 简体转繁体
-void ConvertSimple2TW(const std::string &in, std::string &out)
+int ConvertCode(std::string &charset, std::string &in, std::string &out)
 {
-	const opencc::SimpleConverter converter("s2t.json");
-	out = converter.Convert(in);
+	std::size_t in_length = in.length();
+	char *in_buffer = (char *)in.data();
+
+	std::size_t out_length = in_length;
+	std::size_t out_left_len = out_length;
+	char *out_buffer = (char*)malloc(out_length);
+	char *out_left = out_buffer;
+
+	iconv_t iconv_handle = iconv_open("UTF-8", charset.c_str());
+	if (iconv_handle == (iconv_t)(-1))
+	{
+		std::cerr << "iconv_open error" << std::endl;
+		free(out_buffer);
+		iconv_close(iconv_handle);
+		return -1;
+	}
+
+	std::size_t ret = iconv(iconv_handle, &in_buffer, &in_length, &out_left, &out_left_len);
+	while (ret == -1 && errno == E2BIG)
+	{
+		out_length += in_length;		
+		char *new_out_buffer = (char*)realloc(out_buffer, out_length);
+		if (new_out_buffer == nullptr)
+		{
+			std::cerr << "realloc error" << std::endl;
+			free(out_buffer);
+			iconv_close(iconv_handle);
+			return -1;
+		}
+
+		out_buffer = new_out_buffer;
+		out_left = out_buffer;
+		out_left_len = out_length;
+		ret = iconv(iconv_handle, &in_buffer, &in_length, &out_left, &out_left_len);
+	}
+
+	if (ret == -1)
+	{
+		std::cerr << "iconv error" << std::endl;
+		free(out_buffer);
+		iconv_close(iconv_handle);
+		return -1;
+	}
+
+	out = out_buffer;
+	free(out_buffer);
+	iconv_close(iconv_handle);
+	return 0;
 }
 
-// 转换输出路径
+void Convert2Utf8(std::string &in, std::string &out)
+{
+	uchardet_t uchardet_handle = uchardet_new();
+	int ret = uchardet_handle_data(uchardet_handle, in.data(), in.length());
+	if (ret != 0)
+	{
+		return;
+	}
+
+	uchardet_data_end(uchardet_handle);
+	std::string charset = uchardet_get_charset(uchardet_handle);
+	uchardet_delete(uchardet_handle);
+
+	std::transform(charset.begin(), charset.end(), charset.begin(), ::toupper);
+
+	if (charset.compare("UTF-8") != 0)
+	{		
+		ConvertCode(charset, in, out);
+	}
+}
+
+void ConvertSimple2Traditional(std::string in, std::string &out)
+{
+    std::string in_utf8;
+    Convert2Utf8(in, in_utf8);
+	const opencc::SimpleConverter converter("s2t.json");
+	out = converter.Convert(in_utf8);
+}
+
 fs::path ConvertOutPath(fs::path &input_dir, fs::path &output_dir, fs::path &input_path)
 {
 	fs::path out_path{ "." };
@@ -65,7 +139,6 @@ fs::path ConvertOutPath(fs::path &input_dir, fs::path &output_dir, fs::path &inp
 
 	return out_path;
 }
-
 
 int main(int argc, char* argv[])
 {
@@ -98,7 +171,7 @@ int main(int argc, char* argv[])
 				ifs.close();
 
 				std::string out;
-				ConvertSimple2TW(ss.str(), out);				
+				ConvertSimple2Traditional(ss.str(), out);				
 
 				fs::path input_path = de.path();
 				fs::path output_path = ConvertOutPath(input_dir, output_dir, input_path);

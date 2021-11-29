@@ -41,7 +41,7 @@ bool CheckInputValid(fs::path &input_dir, fs::path &output_dir)
 	return true;
 }
 
-int ConvertCode(std::string &charset, std::string &in, std::string &out)
+int ConvertCode(std::string in_charset, std::string out_charset, std::string &in, std::string &out)
 {
 	std::size_t in_length = in.length();
 	char *in_buffer = (char *)in.data();
@@ -51,7 +51,7 @@ int ConvertCode(std::string &charset, std::string &in, std::string &out)
 	char *out_buffer = (char*)malloc(out_length);
 	char *out_left = out_buffer;
 
-	iconv_t iconv_handle = iconv_open("UTF-8", charset.c_str());
+	iconv_t iconv_handle = iconv_open(out_charset.c_str(), in_charset.c_str());
 	if (iconv_handle == (iconv_t)(-1))
 	{
 		std::cerr << "iconv_open error" << std::endl;
@@ -74,8 +74,8 @@ int ConvertCode(std::string &charset, std::string &in, std::string &out)
 		}
 
 		out_buffer = new_out_buffer;
-		out_left = out_buffer;
-		out_left_len = out_length;
+		out_left = out_buffer + in_length;
+		out_left_len += in_length;
 		ret = iconv(iconv_handle, &in_buffer, &in_length, &out_left, &out_left_len);
 	}
 
@@ -110,7 +110,7 @@ void Convert2Utf8(std::string &in, std::string &out)
 
 	if (charset.compare("UTF-8") != 0)
 	{		
-		ConvertCode(charset, in, out);
+		ConvertCode(charset, "UTF-8", in, out);
 	}
 }
 

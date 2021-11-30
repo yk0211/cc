@@ -44,7 +44,10 @@ bool CheckInputValid(fs::path &input_dir, fs::path &output_dir)
 int ConvertCode(std::string in_charset, std::string out_charset, std::string &in, std::string &out)
 {
 	std::size_t in_length = in.length();
+	std::size_t in_left_len = in_length;
+
 	char *in_buffer = (char *)in.data();
+	char *in_left = in_buffer;
 
 	std::size_t out_length = in_length * 2;
 	std::size_t out_left_len = out_length;
@@ -55,7 +58,7 @@ int ConvertCode(std::string in_charset, std::string out_charset, std::string &in
 		return -1;
 	}
 
-	char *out_left = out_buffer;
+	char *out_left = out_buffer;	
 
 	iconv_t iconv_handle = iconv_open(out_charset.c_str(), in_charset.c_str());
 	if (iconv_handle == (iconv_t)(-1))
@@ -66,28 +69,7 @@ int ConvertCode(std::string in_charset, std::string out_charset, std::string &in
 		return -1;
 	}
 
-	std::size_t ret = iconv(iconv_handle, &in_buffer, &in_length, &out_left, &out_left_len);
-	while (ret == -1 && errno == E2BIG)
-	{		
-		std::size_t increase = 12;
-		out_length += increase;
-		out_left_len += increase;
-
-		char *new_out_buffer = (char*)realloc(out_buffer, out_length);
-		if (new_out_buffer == nullptr)
-		{
-			std::cerr << "realloc error" << std::endl;
-			free(out_buffer);
-			iconv_close(iconv_handle);
-			return -1;
-		}
-		
-		std::size_t len = out_left - out_buffer;
-		out_buffer = new_out_buffer;
-		out_left = out_buffer + len;
-		ret = iconv(iconv_handle, &in_buffer, &in_length, &out_left, &out_left_len);
-	}
-
+	std::size_t ret = iconv(iconv_handle, &in_left, &in_left_len, &out_left, &out_left_len);
 	if (ret == -1)
 	{
 		std::cerr << "iconv error" << std::endl;
@@ -127,12 +109,15 @@ void Convert2Utf8(std::string &in, std::string &out)
 	}
 }
 
-void ConvertSimple2Traditional(std::string in, std::string &out)
+void ConvertSimple2Traditional(std::string &in, std::string &out)
 {
-    std::string in_utf8;
-    Convert2Utf8(in, in_utf8);
-	const opencc::SimpleConverter converter("s2t.json");
-	out = converter.Convert(in_utf8);
+	if (in.length() > 0)
+	{
+		std::string in_utf8;
+		Convert2Utf8(in, in_utf8);
+		const opencc::SimpleConverter converter("s2t.json");
+		out = converter.Convert(in_utf8);
+	}  
 }
 
 fs::path ConvertOutPath(fs::path &input_dir, fs::path &output_dir, fs::path &input_path)
@@ -194,7 +179,7 @@ int main(int argc, char* argv[])
 					ifs.close();
 
 					std::string out;
-					ConvertSimple2Traditional(ss.str(), out);
+					ConvertSimple2Traditional(std::move(ss.str()), out);
 
 					fs::ofstream ofs;
 					ofs.open(output_path);

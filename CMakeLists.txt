@@ -12,15 +12,18 @@ elseif(UNIX)
     set(CMAKE_CXX_FLAGS_DEBUG "$ENV{CXXFLAGS} -ggdb -O0 -Wl,-rpath=./:./lib")
 endif()
 
-add_executable(${PROJECT_NAME} "src/main.cpp")
-include_directories(
-    "${PROJECT_SOURCE_DIR}/include"
-)
 link_directories(
     "${PROJECT_SOURCE_DIR}/lib"
+)
+
+add_executable(${PROJECT_NAME} "src/main.cpp")
+
+include_directories(
+    "${PROJECT_SOURCE_DIR}/include"
 )
 target_link_libraries(${PROJECT_NAME} 
     opencc
     uchardet
     iconv
+    yaml-cpp
 )

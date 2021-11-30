@@ -1,0 +1,5 @@
+cc:
+    input_directory: "1"
+    output_directory: "2"
+    exclude_extension: [".jpg",".zip"]
+    

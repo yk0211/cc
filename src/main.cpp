@@ -6,6 +6,7 @@
 #include <ghc/filesystem.hpp>
 #include <uchardet/uchardet.h>
 #include <iconv/iconv.h>
+#include <yaml-cpp/yaml.h>
 
 namespace fs = ghc::filesystem;
 
@@ -34,10 +35,9 @@ bool CheckInputValid(fs::path &input_dir, fs::path &output_dir)
 
 	if (!output_entry.exists())
 	{
-		std::cerr << "output is not exists." << std::endl;
-		return false;
+		fs::create_directories(output_dir);
 	}
-
+	
 	return true;
 }
 
@@ -46,9 +46,15 @@ int ConvertCode(std::string in_charset, std::string out_charset, std::string &in
 	std::size_t in_length = in.length();
 	char *in_buffer = (char *)in.data();
 
-	std::size_t out_length = in_length;
+	std::size_t out_length = in_length * 2;
 	std::size_t out_left_len = out_length;
 	char *out_buffer = (char*)malloc(out_length);
+	if (out_buffer == nullptr)
+	{
+		std::cerr << "malloc error" << std::endl;
+		return -1;
+	}
+
 	char *out_left = out_buffer;
 
 	iconv_t iconv_handle = iconv_open(out_charset.c_str(), in_charset.c_str());
@@ -62,8 +68,11 @@ int ConvertCode(std::string in_charset, std::string out_charset, std::string &in
 
 	std::size_t ret = iconv(iconv_handle, &in_buffer, &in_length, &out_left, &out_left_len);
 	while (ret == -1 && errno == E2BIG)
-	{
-		out_length += in_length;		
+	{		
+		std::size_t increase = 12;
+		out_length += increase;
+		out_left_len += increase;
+
 		char *new_out_buffer = (char*)realloc(out_buffer, out_length);
 		if (new_out_buffer == nullptr)
 		{
@@ -72,10 +81,10 @@ int ConvertCode(std::string in_charset, std::string out_charset, std::string &in
 			iconv_close(iconv_handle);
 			return -1;
 		}
-
+		
+		std::size_t len = out_left - out_buffer;
 		out_buffer = new_out_buffer;
-		out_left = out_buffer + in_length;
-		out_left_len += in_length;
+		out_left = out_buffer + len;
 		ret = iconv(iconv_handle, &in_buffer, &in_length, &out_left, &out_left_len);
 	}
 
@@ -112,6 +121,10 @@ void Convert2Utf8(std::string &in, std::string &out)
 	{		
 		ConvertCode(charset, "UTF-8", in, out);
 	}
+	else
+	{
+		out = in;
+	}
 }
 
 void ConvertSimple2Traditional(std::string in, std::string &out)
@@ -142,50 +155,68 @@ fs::path ConvertOutPath(fs::path &input_dir, fs::path &output_dir, fs::path &inp
 
 int main(int argc, char* argv[])
 {
-	if (argc < 3)
-	{
-		std::cerr << "Usage like:cc input_dir output_dir." << std::endl;
-		return -1;
-	}
-
-	fs::path input_dir = fs::u8path(argv[1]);
-	fs::path output_dir = fs::u8path(argv[2]);
-
-	if (!CheckInputValid(input_dir, output_dir))
-	{
-		return -1;
-	}
-
 	try
 	{
+		YAML::Node config = YAML::LoadFile("config.yaml");
+		std::string input = config["cc"]["input_directory"].as<std::string>();
+		std::string output = config["cc"]["output_directory"].as<std::string>();
+		std::vector<std::string> exclude = config["cc"]["exclude_extension"].as<std::vector<std::string>>();
+
+		fs::path input_dir = fs::u8path(input);
+		fs::path output_dir = fs::u8path(output);
+
+		if (!CheckInputValid(input_dir, output_dir))
+		{
+			return -1;
+		}
+
 		auto rdi = fs::recursive_directory_iterator(input_dir);
 		for (auto de : rdi)
 		{
+			fs::path input_path = de.path();
+			fs::path output_path = ConvertOutPath(input_dir, output_dir, input_path);
+
 			if (de.is_regular_file())
-			{
-				fs::ifstream ifs;
-				ifs.open(de.path());
+			{			
+				std::string extension = input_path.extension().u8string();
+				std::vector<std::string>::iterator it = std::find_if(exclude.begin(), exclude.end(),
+					[&extension](const std::string &s) {
+					return extension == s;
+				});
 
-				std::stringstream ss;
-				ss << ifs.rdbuf();
-				ifs.close();
+				if (it == exclude.end())
+				{
+					fs::ifstream ifs;
+					ifs.open(de.path());
 
-				std::string out;
-				ConvertSimple2Traditional(ss.str(), out);				
+					std::stringstream ss;
+					ss << ifs.rdbuf();
+					ifs.close();
 
-				fs::path input_path = de.path();
-				fs::path output_path = ConvertOutPath(input_dir, output_dir, input_path);
+					std::string out;
+					ConvertSimple2Traditional(ss.str(), out);
 
-				fs::ofstream ofs;
-				ofs.open(output_path);
-				ofs << out;
-				ofs.flush();
-				ofs.close();
+					fs::ofstream ofs;
+					ofs.open(output_path);
+					ofs << out;
+					ofs.flush();
+					ofs.close();
+				}	
+				else
+				{
+					fs::copy(input_path, output_path);
+				}
+
+				fs::path output_path_temp = output_path;
+				std::string convert_output_filename;
+				ConvertSimple2Traditional(output_path_temp.filename().u8string(), convert_output_filename);
+				
+				fs::path out_path_filename = convert_output_filename;
+				output_path_temp.replace_filename(out_path_filename);
+				fs::rename(output_path, output_path_temp);				
 			}
 			else if (de.is_directory())
 			{
-				fs::path input_path = de.path();
-				fs::path output_path = ConvertOutPath(input_dir, output_dir, input_path);
 				fs::create_directories(output_path);
 			}
 		}

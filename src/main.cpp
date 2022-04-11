@@ -51,7 +51,7 @@ bool CheckPathValid(fs::path &input_dir, fs::path &output_dir)
 	return true;
 }
 
-int ConvertCode(std::string in_charset, std::string out_charset, std::string &in, std::string &out)
+int ConvertCode(std::string in_charset, std::string out_charset, std::string const &in, std::string &out)
 {
 	std::size_t in_length = in.length();
 	std::size_t in_left_len = in_length;
@@ -94,7 +94,7 @@ int ConvertCode(std::string in_charset, std::string out_charset, std::string &in
 	return 0;
 }
 
-void Convert2Utf8(std::string &in, std::string &out)
+void Convert2Utf8(std::string const &in, std::string &out)
 {
 	uchardet_t uchardet_handle = uchardet_new();
 	int ret = uchardet_handle_data(uchardet_handle, in.data(), in.length());
@@ -119,7 +119,7 @@ void Convert2Utf8(std::string &in, std::string &out)
 	}
 }
 
-void ConvertSimple2Traditional(std::string &in, std::string &out)
+void ConvertSimple2Traditional(std::string const &in, std::string &out)
 {
 	if (in.length() > 0)
 	{

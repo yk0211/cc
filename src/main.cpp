@@ -68,6 +68,8 @@ int ConvertCode(std::string in_charset, std::string out_charset, std::string con
 		return -1;
 	}
 
+	memset(out_buffer, 0, out_length);
+
 	char *out_left = out_buffer;	
 
 	iconv_t iconv_handle = iconv_open(out_charset.c_str(), in_charset.c_str());
@@ -109,9 +111,11 @@ void Convert2Utf8(std::string const &in, std::string &out)
 
 	std::transform(charset.begin(), charset.end(), charset.begin(), ::toupper);
 
+	//std::cerr << "in:" << in << " charset:" << charset << std::endl;
 	if (charset.compare("UTF-8") != 0)
 	{		
 		ConvertCode(charset, "UTF-8", in, out);
+		//std::cerr << "in:" << in << " out:" << out << std::endl;
 	}
 	else
 	{
@@ -202,13 +206,16 @@ int main(int argc, char* argv[])
 					fs::copy(input_path, output_path);
 				}
 
-				fs::path output_path_temp = output_path;
-				std::string convert_output_filename;
-				ConvertSimple2Traditional(output_path_temp.filename().u8string(), convert_output_filename);
-				
-				fs::path out_path_filename = convert_output_filename;
-				output_path_temp.replace_filename(out_path_filename);
-				fs::rename(output_path, output_path_temp);				
+                if (output_path.has_filename())
+                {
+                    std::string convert_output_filename;
+                    ConvertSimple2Traditional(output_path.filename().u8string(), convert_output_filename);
+                    
+                    fs::path output_path_filename = convert_output_filename;
+                    fs::path output_path_temp = output_path;
+                    output_path_temp.replace_filename(output_path_filename);                    
+                    fs::rename(output_path, output_path_temp);                
+                }
 			}
 			else if (de.is_directory())
 			{

@@ -10,34 +10,44 @@
 
 namespace fs = ghc::filesystem;
 
-bool CheckInputValid(fs::path &input_dir, fs::path &output_dir)
+bool CheckPathValid(fs::path &input_dir, fs::path &output_dir)
 {
-	fs::directory_entry input_entry(input_dir);
-	fs::directory_entry output_entry(output_dir);
-
-	if (!input_entry.is_directory())
-	{
-		std::cerr << "input is not directory." << std::endl;
-		return false;
-	}
-
-	if (!output_entry.is_directory())
-	{
-		std::cerr << "output is not directory." << std::endl;
-		return false;
-	}
-
-	if (!input_entry.exists())
+	std::error_code ec;
+	fs::file_status input_dir_status = fs::status(input_dir, ec);
+	if (ec)
 	{
 		std::cerr << "input is not exists." << std::endl;
 		return false;
 	}
 
-	if (!output_entry.exists())
+	if (!fs::is_directory(input_dir_status))
+	{
+		std::cerr << "input is not directory." << std::endl;
+		return false;
+	}
+
+	fs::file_status output_dir_status = fs::status(output_dir, ec);
+	if (ec)
 	{
 		fs::create_directories(output_dir);
 	}
-	
+	else
+	{
+		if (!fs::is_directory(output_dir_status))
+		{
+			std::cerr << "output is not directory." << std::endl;
+			return false;
+		}
+		else
+		{
+			if (!fs::is_empty(output_dir, ec))
+			{
+				std::cerr << "output is not empty directory." << std::endl;
+				return false;
+			}
+		}
+	}
+
 	return true;
 }
 
@@ -150,7 +160,7 @@ int main(int argc, char* argv[])
 		fs::path input_dir = fs::u8path(input);
 		fs::path output_dir = fs::u8path(output);
 
-		if (!CheckInputValid(input_dir, output_dir))
+		if (!CheckPathValid(input_dir, output_dir))
 		{
 			return -1;
 		}
@@ -206,13 +216,13 @@ int main(int argc, char* argv[])
 			}
 		}
 	}
-	catch (fs::filesystem_error fe)
+	catch (fs::filesystem_error const &fe)
 	{
-		std::cerr << "Error: " << fe.what() << std::endl;
+		std::cerr << "File Error: " << fe.what() << std::endl;
 	}
-	catch (std::exception e)
+	catch (std::exception const &ex)
 	{
-		std::cerr << "Error: " << e.what() << std::endl;
+		std::cerr << "Error:" << ex.what() << std::endl;
 	}
 
 	return 0;
